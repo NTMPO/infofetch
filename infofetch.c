@@ -1,8 +1,10 @@
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 #include <sys/statvfs.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
+
 
 #define RED     "\033[1;31m"
 #define YELLOW  "\033[1;33m"
@@ -278,6 +280,50 @@ void print_cmd(char *label, char *command, int arrow) {
     if (fp) pclose(fp);
 }
 
+#include <unistd.h>
+#include <stdio.h>
+
+int get_package_count() {
+    FILE *fp;
+    char buf[64];
+    
+    if (access("/usr/bin/pacman", F_OK) == 0) {
+        fp = popen("pacman -Qq | wc -l", "r");
+    }
+    
+    else if (access("/usr/bin/dpkg", F_OK) == 0) {
+        fp = popen("dpkg-query -f '${binary:Package}\n' -W | wc -l", "r");
+    }
+
+    else if (access("/usr/bin/rpm", F_OK) == 0) {
+        fp = popen("rpm -qa | wc -l", "r");
+    }
+
+    else if (access("/sbin/apk", F_OK) == 0) {
+        fp = popen("apk info | wc -l", "r");
+    }
+    else {
+        return 0;
+    }
+
+    if (fp == NULL) return 0;
+    if (fgets(buf, sizeof(buf), fp) != NULL) {
+        pclose(fp);
+        return atoi(buf);
+    }
+    pclose(fp);
+    return 0;
+}
+
+void print_packages(int arrow) {
+    int count = get_package_count();
+    if (count > 0) {
+        char buffer[32];
+        sprintf(buffer, "%d", count);
+        ukaz("Pkgs: ", buffer, arrow);
+    }
+}
+
 
 void print_color() {
     for (int i = 0; i < 8; i++) {
@@ -319,7 +365,7 @@ void print_battery(int arrow) {
 int main(int argc, char *argv[]){
     if (argc > 1 && strcmp(argv[1], "--help") == 0) {
         printf(YELLOW "infofetch " RESET "is a simple neofetch-like system information tool written in C.\n");
-        printf(WHITE "infofetch v1.0" RESET " by " CYAN "NTMPO" RESET "\n");
+        printf(WHITE "infofetch v1.1" RESET " by " CYAN "NTMPO" RESET "\n");
         return 0;
     }
 
@@ -329,8 +375,8 @@ int main(int argc, char *argv[]){
     print_logo(2);   print_temp(2);
     print_logo(3);   print_gpu(4);
     print_logo(4);   print_ram(4);
-    print_logo(5);   print_disk("Disk /: ", "/", 1);
-    print_logo(6);   print_disk("Disk /home: ", "/home", 0);
+    print_logo(5);   print_disk("Disk (/): ", "/", 1);
+    print_logo(6);   print_disk("Disk (/home): ", "/home", 0);
     print_logo(7);   print_uptime(4);
     print_logo(8);   print_battery(3);
     print_logo(9);   print_color();
@@ -340,7 +386,7 @@ int main(int argc, char *argv[]){
     print_logo(13);  print_cmd("Shell: ", "basename $SHELL", 4);
     print_logo(14);  print_cmd("IP:", "ip a 2>/dev/null | grep 'global' | awk '{print $2}' | cut -d/ -f1", 4);
     print_logo(15);  print_cmd("DE: ","echo $XDG_CURRENT_DESKTOP", 4);
-    print_logo(16);  print_cmd("Pkgs: ", "pacman -Q | wc -l | tr -d '\n' && echo ' (pacman)'", 5);
+    print_logo(16);  print_packages(4);
     print_logo(17);  print_cmd("Res:", "xrandr 2>/dev/null | grep '*' | awk '{print $1}'", 5);
     
    
