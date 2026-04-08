@@ -10,8 +10,8 @@ yay -S infofetch
 ```
 # Manual build(other distributions):
 ``` bash
-git clone 
-cd infofetch https://github.com/NTMPO/infofetch
+git clone https://github.com/NTMPO/infofetch
+cd infofetch 
 make
 sudo make install
 ```
