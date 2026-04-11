@@ -15,7 +15,6 @@
 
 //longest aka arrow
 
-
 void ukaz(char *label, char *text, int longest){
     char log[8];
     for (size_t i = 0; i < 7; i++)
@@ -29,44 +28,111 @@ void ukaz(char *label, char *text, int longest){
     printf("\033[1;32m%s>\033[0m \033[1m %s%s\033[0m\n", log, label, text);
 }
 
-void print_info(char *label, char *path, char *search_word, int row){
-    FILE *file = fopen(path, "r");
-    if (file == NULL){
-        printf("error");
-        return;
-    }
+void print_cpu_info(int arrow) {
+    long long user, nice, system, idle, iowait, irq, softirq, steal;
+    long long user2, nice2, system2, idle2, iowait2, irq2, softirq2, steal2;
+
+    int cores = sysconf(_SC_NPROCESSORS_ONLN);
+
+    FILE *fp = fopen("/proc/stat", "r");
+    if (!fp) return;
+    fscanf(fp, "cpu %lld %lld %lld %lld %lld %lld %lld %lld", &user, &nice, &system, &idle, &iowait, &irq, &softirq, &steal);
+    fclose(fp);
+
+    usleep(100000); 
+
+    fp = fopen("/proc/stat", "r");
+    if (!fp) return;
+    fscanf(fp, "cpu %lld %lld %lld %lld %lld %lld %lld %lld", &user2, &nice2, &system2, &idle2, &iowait2, &irq2, &softirq2, &steal2);
+    fclose(fp);
+
+  
+    long long prev_total = user + nice + system + idle + iowait + irq + softirq + steal;
+    long long curr_total = user2 + nice2 + system2 + idle2 + iowait2 + irq2 + softirq2 + steal2;
+    long long total_diff = curr_total - prev_total;
+    long long idle_diff = (idle2 + iowait2) - (idle + iowait);
+    double usage = (double)(total_diff - idle_diff) / total_diff * 100.0;
+
+    char *color = (usage < 30) ? GREEN : (usage < 70) ? YELLOW : RED;
+
+    char buffer[128];
+    sprintf(buffer, "%d (%s%.1f%%" RESET ")", cores, color, usage);
+    
+    ukaz("Core: ", buffer, arrow);
+}
+
+
+void print_cpu_model(int arrow) {
+    FILE *file = fopen("/proc/cpuinfo", "r");
+    if (!file) return;
 
     char line[256];
-    while(fgets(line, sizeof(line), file)){
-        if(strstr(line, search_word)){
+    char model[128] = "Unknown Processor";
+
+    while (fgets(line, sizeof(line), file)) {
+        // x86
+        if (strncmp(line, "model name", 10) == 0) {
             char *ptr = strchr(line, ':');
-            if(ptr != NULL){
-
-                char *value = ptr + 2;
-
-                strtok(value, "\n");
-                
-                ukaz(label,value, row);
+            if (ptr) {
+                strcpy(model, ptr + 2);
+                break;
             }
-            break;
+        }
+        //arm(orange,raspbery pi)
+        if (strncmp(line, "Model", 5) == 0 || strncmp(line, "Hardware", 8) == 0) {
+            char *ptr = strchr(line, ':');
+            if (ptr) {
+                strcpy(model, ptr + 2);
+                
+            }
         }
     }
     fclose(file);
+    model[strcspn(model, "\r\n")] = '\0';
+    ukaz("CPU: ", model, arrow);
 }
 
-void print_gpu(int arrow){
-    FILE *fp = popen("lspci | grep -E 'VGA|3D' | cut -d '[' -f2 | cut -d ']' -f1", "r");
+
+void print_gpu(int arrow) {
+    char buffer[256] = {0};
     
-    if(fp == NULL)return;
-    char buffer[128];
-
-    if(fgets(buffer, sizeof(buffer), fp) != NULL){
-        buffer[strcspn(buffer, "\r\n")] = '\0';
-
-        ukaz("GPU: ", buffer, arrow);
+    FILE *fp = popen("lspci -d ::0300 2>/dev/null", "r");
+    if (fp) {
+        if (fgets(buffer, sizeof(buffer), fp)) {
+          
+            char *start = strrchr(buffer, '[');
+            char *end = strrchr(buffer, ']');
+            if (start && end && end > start) {
+                *end = '\0';
+                ukaz("GPU: ", start + 1, arrow);
+                pclose(fp);
+                return;
+            }
+           
+            char *ptr = strrchr(buffer, ':');
+            if (ptr) {
+                char *val = ptr + 1;
+                while (*val == ' ') val++;
+                buffer[strcspn(buffer, "\r\n")] = '\0';
+                ukaz("GPU: ", val, arrow);
+                pclose(fp);
+                return;
+            }
+        }
+        pclose(fp);
     }
 
-    pclose(fp);
+    fp = fopen("/proc/device-tree/model", "r");
+    if (fp) {
+        if (fgets(buffer, sizeof(buffer), fp)) {
+            ukaz("GPU: ", buffer, arrow);
+            fclose(fp);
+            return;
+        }
+        fclose(fp);
+    }
+
+    ukaz("GPU: ", "Unknown", arrow);
 }
 
 
@@ -280,8 +346,6 @@ void print_cmd(char *label, char *command, int arrow) {
     if (fp) pclose(fp);
 }
 
-#include <unistd.h>
-#include <stdio.h>
 
 int get_package_count() {
     FILE *fp;
@@ -365,13 +429,13 @@ void print_battery(int arrow) {
 int main(int argc, char *argv[]){
     if (argc > 1 && strcmp(argv[1], "--help") == 0) {
         printf(YELLOW "infofetch " RESET "is a simple neofetch-like system information tool written in C.\n");
-        printf(WHITE "infofetch v1.1" RESET " by " CYAN "NTMPO" RESET "\n");
+        printf(WHITE "infofetch v1.3" RESET " by " CYAN "NTMPO" RESET "\n");
         return 0;
     }
 
     printf("\t\t---SYSTEM INFO---\n");
-    print_logo(0);   print_info("CPU: ", "/proc/cpuinfo", "model name", 4);
-    print_logo(1);   print_info("Core: ", "/proc/cpuinfo", "cpu cores", 2);
+    print_logo(0);   print_cpu_model(4);
+    print_logo(1);   print_cpu_info(4);
     print_logo(2);   print_temp(2);
     print_logo(3);   print_gpu(4);
     print_logo(4);   print_ram(4);
