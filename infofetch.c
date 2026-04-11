@@ -349,9 +349,6 @@ void print_cmd(char *label, char *command, int arrow) {
     if (fp) pclose(fp);
 }
 
-#include <unistd.h>
-#include <stdio.h>
-
 int get_package_count() {
     FILE *fp;
     char buf[64];
@@ -425,16 +422,6 @@ int get_package_count() {
     pclose(fp);
     return 0;
 }
-
-void print_packages(int arrow) {
-    int count = get_package_count();
-    if (count > 0) {
-        char buffer[32];
-        sprintf(buffer, "%d", count);
-        ukaz("Pkgs: ", buffer, arrow);
-    }
-}
-
 
 void print_color() {
     for (int i = 0; i < 8; i++) {
